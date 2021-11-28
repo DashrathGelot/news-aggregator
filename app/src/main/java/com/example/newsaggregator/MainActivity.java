@@ -4,30 +4,73 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import android.content.Intent;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.webkit.WebView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
-import android.widget.TextView;
+import android.widget.Toast;
 
-import java.util.Locale;
+import com.example.newsaggregator.model.News;
+import com.example.newsaggregator.model.NewsSource;
+import com.example.newsaggregator.services.NewsService;
+import com.example.newsaggregator.services.SourcesService;
 
-public class MainActivity extends AppCompatActivity {
+import java.util.ArrayList;
+
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     private static final String TAG = "MainActivity";
     private DrawerLayout drawerLayout;
     private ListView drawerList;
-    private TextView textView;
     private ActionBarDrawerToggle drawerToggle;
-    private String[] items;
+    private String[] sources;
+    private NewsSource[] newsSources;
+    ArrayList<News> articles;
+    private NewsService newsService;
+    private NewsAdapter newsAdapter;
+    RecyclerView recyclerView;
+
+    private void assignStart() {
+        drawerLayout = findViewById(R.id.drawer_layout);
+        drawerList = findViewById(R.id.left_drawer);
+        recyclerView = findViewById(R.id.newslist);
+
+        SourcesService sourcesService = new SourcesService(this);
+        new Thread(sourcesService).start();
+        newsService = new NewsService(this);
+    }
+
+    public void setNewsSource(NewsSource[] newsSources) {
+        this.newsSources = newsSources;
+        sources = new String[newsSources.length];
+        for (int i = 0; i < sources.length; i++)
+            sources[i] = newsSources[i].getName();
+
+        drawerList.setAdapter(new ArrayAdapter<>(this, R.layout.drawer_list, sources));
+    }
+
+    public void setArticles(ArrayList<News> articles) {
+        this.articles = articles;
+        newsAdapter = new NewsAdapter(this);
+        newsAdapter.setNewsList(articles);
+        recyclerView.setAdapter(newsAdapter);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+    }
 
     private void selectItem(int position) {
-        textView.setText(String.format(Locale.getDefault(),
-                "You picked %s", items[position]));
+        newsService.setSource(newsSources[position].getId());
+        new Thread(newsService).start();
+        findViewById(R.id.content_frame).setBackgroundColor(Color.parseColor("#ffffff"));
         drawerLayout.closeDrawer(drawerList);
     }
 
@@ -35,19 +78,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        assignStart();
 
-        textView = findViewById(R.id.textView);
-
-        items = new String[15];
-        for (int i = 0; i < items.length; i++)
-            items[i] = "Drawer Item #" + (i + 1);
-
-        drawerLayout = findViewById(R.id.drawer_layout);
-        drawerList = findViewById(R.id.left_drawer);
-
-        drawerList.setAdapter(new ArrayAdapter<>(this, R.layout.drawer_list, items));
         drawerList.setOnItemClickListener((parent, view, position, id) -> selectItem(position));
-
         drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, R.string.drawer_open, R.string.drawer_close);
 
         if (getSupportActionBar() != null) {
@@ -90,8 +123,27 @@ public class MainActivity extends AppCompatActivity {
             selection = "C is your selection";
         }
 
-        textView.setText(selection);
-
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showToast(String message) {
+        Toast.makeText(this,message, Toast.LENGTH_SHORT).show();
+    }
+
+    public void apiFailedToFetch() {
+        showToast("Failed to Fetch the news sources");
+    }
+
+    @Override
+    public void onClick(View v) {
+//        Intent web = new Intent(this, NewsWeb.class);
+        int position = recyclerView.getChildAdapterPosition(v);
+//        web.putExtra("url", articles.get(position).getNewsUrl());
+//        startActivity(web);
+        showToast(articles.get(position).getNewsUrl());
+
+        WebView webView = new WebView(this);
+        webView.loadUrl(articles.get(position).getNewsUrl());
+
     }
 }
