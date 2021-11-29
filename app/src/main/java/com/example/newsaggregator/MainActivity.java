@@ -1,6 +1,7 @@
 package com.example.newsaggregator;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
@@ -10,25 +11,30 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.content.DialogInterface;
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
-import android.webkit.WebView;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.newsaggregator.model.News;
 import com.example.newsaggregator.model.NewsSource;
 import com.example.newsaggregator.services.NewsService;
+import com.example.newsaggregator.services.Service;
 import com.example.newsaggregator.services.SourcesService;
 
 import org.json.JSONArray;
@@ -39,11 +45,9 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.sql.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -68,6 +72,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     Map<String, String> languagesMap;
     Map<Integer, String> filterMap = new HashMap<>();
 
+    private Service service;
+
     private void assignStart() {
         drawerLayout = findViewById(R.id.drawer_layout);
         drawerList = findViewById(R.id.left_drawer);
@@ -83,6 +89,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         SourcesService sourcesService = new SourcesService(this, countriesMap, languagesMap);
         new Thread(sourcesService).start();
         newsService = new NewsService(this);
+
+        service = new Service();
+        service.setColor(this);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.N)
@@ -94,7 +103,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             sources[i] = newsSources[i].getName();
 
         this.setTitle("News Aggregator " + "(" +sources.length+")");
-        arrayAdapter = new ArrayAdapter<>(this, R.layout.drawer_list, sources);
+
+        arrayAdapter = new ArrayAdapter<String>(this, R.layout.drawer_list, sources) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                TextView text = view.findViewById(android.R.id.text1);
+                text.setTextColor(service.getColor(newsSources[position].getCategory()));
+                return super.getView(position, convertView, parent);
+            }
+        };
         drawerList.setAdapter(arrayAdapter);
         updateMenu(newsSources);
     }
@@ -152,35 +171,46 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         String prev = filterMap.get(id);
         filterMap.put(id, item);
 
-        String []nSources = Arrays.stream(newsSources)
-                 .filter(source -> (source.getCategory().equals(filterMap.get(1)) || filterMap.get(1).equals("all"))
-                && (source.getCountry().equals(filterMap.get(2)) || filterMap.get(2).equals("all"))
-                && (source.getLanguage().equals(filterMap.get(3)) || filterMap.get(3).equals("all")))
-                 .map(NewsSource::getName).toArray(String[]::new);
+        NewsSource[] filteredSources = Arrays.stream(newsSources)
+                .filter(source -> (source.getCategory().equals(filterMap.get(1)) || filterMap.get(1).equals("all"))
+                        && (source.getCountry().equals(filterMap.get(2)) || filterMap.get(2).equals("all"))
+                        && (source.getLanguage().equals(filterMap.get(3)) || filterMap.get(3).equals("all")))
+                .toArray(NewsSource[]::new);
+
+        String []nSources = Arrays.stream(filteredSources).map(NewsSource::getName).toArray(String[]::new);
 
         if (nSources.length == 0) {
             new AlertDialog.Builder(this)
                     .setTitle("No News Sources")
                     .setMessage("no news sources exist that match the specified Topic, Language and/or Country")
-                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            filterMap.put(id, prev);
-                        }
-                    }).show();
+                    .setPositiveButton("OK", (dialog, which) -> filterMap.put(id, prev)).show();
         } else {
             sources = nSources;
-            arrayAdapter = new ArrayAdapter<>(this, R.layout.drawer_list, sources);
+            arrayAdapter = new ArrayAdapter<String>(this, R.layout.drawer_list, sources) {
+                @NonNull
+                @Override
+                public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                    View view = super.getView(position, convertView, parent);
+                    TextView text = view.findViewById(android.R.id.text1);
+                    text.setTextColor(service.getColor(filteredSources[position].getCategory()));
+                    return super.getView(position, convertView, parent);
+                }
+            };
+
             drawerList.setAdapter(arrayAdapter);
             arrayAdapter.notifyDataSetChanged();
-            setTitle("News Aggregator " + "(" +sources.length+")");
+            setTitle("News Aggregator (" + sources.length + ")");
         }
     }
 
     @SuppressLint("ResourceAsColor")
     @RequiresApi(api = Build.VERSION_CODES.N)
     private void updateMenu(NewsSource[] newsSources) {
-        Arrays.stream(newsSources).map(NewsSource::getCategory).distinct().forEach(topic -> topics.add(1, 0, 0, topic));
+        Arrays.stream(newsSources).map(NewsSource::getCategory).distinct().forEach((topic) -> {
+            SpannableString str = new SpannableString(topic);
+            str.setSpan(new ForegroundColorSpan(service.getColor(topic)), 0, str.length(), 0);
+            topics.add(1, 0, 0, str);
+        });
         Arrays.stream(newsSources).map(NewsSource::getCountry).distinct().forEach(country -> countries.add(2, 0, 0, country));
         Arrays.stream(newsSources).map(NewsSource::getLanguage).distinct().forEach(lang -> language.add(3, 0, 0, lang));
     }
@@ -222,10 +252,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         int position = recyclerView.getChildAdapterPosition(v);
 //        web.putExtra("url", articles.get(position).getNewsUrl());
 //        startActivity(web);
-        showToast(articles.get(position).getNewsUrl());
+//        showToast(articles.get(position).getNewsUrl());
+//        WebView webView = new WebView(this);
+//        webView.loadUrl(articles.get(position).getNewsUrl());
 
-        WebView webView = new WebView(this);
-        webView.loadUrl(articles.get(position).getNewsUrl());
+        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(articles.get(position).getNewsUrl())));
     }
 
     public Map<String, String> loadJsonData(int resource, String key) {
