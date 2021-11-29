@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:title="@string/topics"
-        android:id="@+id/menuA" />
-    <item android:title="@string/countries"
-        android:id="@+id/menuC" />
-    <item android:title="@string/lang"
-        android:id="@+id/menuB" />
-</menu>

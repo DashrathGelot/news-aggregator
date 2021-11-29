@@ -11,7 +11,10 @@ import com.example.newsaggregator.model.News;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Locale;
 
 public class NewsService extends Service implements Runnable {
     private static final String TAG = "News Service Runnable";
@@ -35,13 +38,16 @@ public class NewsService extends Service implements Runnable {
 
             for (int i = 0; i < jSources.length(); i++) {
                 JSONObject article = (JSONObject) jSources.get(i);
+
+                DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm", Locale.ENGLISH);
+
                 newsList.add(new News(article.getString("title"),
                         article.getString("author"),
                         article.getString("description"),
-                        article.getString("publishedAt"),
+                        ZonedDateTime.parse(article.getString("publishedAt")).format(dateTimeFormatter),
                         article.getString("urlToImage"),
                         article.getString("url")
-                        ));
+                ));
             }
         } catch (Exception e) {
             Log.d(TAG, "parseJSON: " + e.getMessage());
@@ -68,7 +74,8 @@ public class NewsService extends Service implements Runnable {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void run() {
-        String API_URL = "https://newsapi.org/v2/top-headlines?sources="+source+"&apiKey=929aff506ba44e939989bcde945477a3";
+        String API_TOKEN = "6fac9434bdfc49408d7df9e0ff2b6f7f";
+        String API_URL = "https://newsapi.org/v2/top-headlines?sources="+source+"&apiKey="+API_TOKEN;
         handleResult(getResult(API_URL));
     }
 }

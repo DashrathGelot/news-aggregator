@@ -11,12 +11,18 @@ import com.example.newsaggregator.model.NewsSource;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Map;
+
 public class SourcesService extends Service implements Runnable {
     private static final String TAG = "Source Service Runnable";
     MainActivity mainActivity;
+    Map<String, String> countriesMap;
+    Map<String, String> languagesMap;
 
-    public SourcesService(MainActivity mainActivity) {
+    public SourcesService(MainActivity mainActivity, Map<String, String> countriesMap, Map<String, String> languagesMap) {
         this.mainActivity = mainActivity;
+        this.countriesMap = countriesMap;
+        this.languagesMap = languagesMap;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -32,8 +38,9 @@ public class SourcesService extends Service implements Runnable {
                 sources[i] = new NewsSource(source.getString("id"),
                         source.getString("name"),
                         source.getString("category"),
-                        source.getString("country"),
-                        source.getString("language"));
+                        countriesMap.get(source.getString("country").toUpperCase()),
+                        languagesMap.get(source.getString("language").toUpperCase())
+                );
             }
 
             return sources;
@@ -63,7 +70,9 @@ public class SourcesService extends Service implements Runnable {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void run() {
-        String API_URL = "https://newsapi.org/v2/top-headlines/sources?apiKey=929aff506ba44e939989bcde945477a3";
+        String API_TOKEN = "6fac9434bdfc49408d7df9e0ff2b6f7f";
+//        929aff506ba44e939989bcde945477a3
+        String API_URL = "https://newsapi.org/v2/top-headlines/sources?apiKey="+API_TOKEN;
         handleResult(getResult(API_URL));
     }
 }

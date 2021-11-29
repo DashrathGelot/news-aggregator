@@ -1,19 +1,25 @@
 package com.example.newsaggregator;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.SubMenu;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.ArrayAdapter;
@@ -25,38 +31,72 @@ import com.example.newsaggregator.model.NewsSource;
 import com.example.newsaggregator.services.NewsService;
 import com.example.newsaggregator.services.SourcesService;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.sql.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     private static final String TAG = "MainActivity";
     private DrawerLayout drawerLayout;
     private ListView drawerList;
+    private ArrayAdapter<String> arrayAdapter;
     private ActionBarDrawerToggle drawerToggle;
-    private String[] sources;
     private NewsSource[] newsSources;
+    private String[] sources;
     ArrayList<News> articles;
     private NewsService newsService;
     private NewsAdapter newsAdapter;
     RecyclerView recyclerView;
+
+    private SubMenu topics;
+    private SubMenu countries;
+    private SubMenu language;
+
+    Map<String, String> countriesMap;
+    Map<String, String> languagesMap;
+    Map<Integer, String> filterMap = new HashMap<>();
 
     private void assignStart() {
         drawerLayout = findViewById(R.id.drawer_layout);
         drawerList = findViewById(R.id.left_drawer);
         recyclerView = findViewById(R.id.newslist);
 
-        SourcesService sourcesService = new SourcesService(this);
+        countriesMap = loadJsonData(R.raw.country_codes, "countries");
+        languagesMap = loadJsonData(R.raw.language_codes, "languages");
+
+        filterMap.put(1, "all");
+        filterMap.put(2, "all");
+        filterMap.put(3, "all");
+
+        SourcesService sourcesService = new SourcesService(this, countriesMap, languagesMap);
         new Thread(sourcesService).start();
         newsService = new NewsService(this);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     public void setNewsSource(NewsSource[] newsSources) {
         this.newsSources = newsSources;
         sources = new String[newsSources.length];
+
         for (int i = 0; i < sources.length; i++)
             sources[i] = newsSources[i].getName();
 
-        drawerList.setAdapter(new ArrayAdapter<>(this, R.layout.drawer_list, sources));
+        this.setTitle("News Aggregator " + "(" +sources.length+")");
+        arrayAdapter = new ArrayAdapter<>(this, R.layout.drawer_list, sources);
+        drawerList.setAdapter(arrayAdapter);
+        updateMenu(newsSources);
     }
 
     public void setArticles(ArrayList<News> articles) {
@@ -67,13 +107,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     private void selectItem(int position) {
-        newsService.setSource(newsSources[position].getId());
+        NewsSource newsSource = Arrays.stream(newsSources).filter(newsSource1 -> newsSource1.getName().equals(sources[position])).findFirst().get();
+        newsService.setSource(newsSource.getId());
+        this.setTitle(newsSource.getName());
         new Thread(newsService).start();
         findViewById(R.id.content_frame).setBackgroundColor(Color.parseColor("#ffffff"));
         drawerLayout.closeDrawer(drawerList);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -101,28 +145,66 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         drawerToggle.onConfigurationChanged(newConfig);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void updateData(String item, int id) {
+        if (id == 0) return;
+
+        String prev = filterMap.get(id);
+        filterMap.put(id, item);
+
+        String []nSources = Arrays.stream(newsSources)
+                 .filter(source -> (source.getCategory().equals(filterMap.get(1)) || filterMap.get(1).equals("all"))
+                && (source.getCountry().equals(filterMap.get(2)) || filterMap.get(2).equals("all"))
+                && (source.getLanguage().equals(filterMap.get(3)) || filterMap.get(3).equals("all")))
+                 .map(NewsSource::getName).toArray(String[]::new);
+
+        if (nSources.length == 0) {
+            new AlertDialog.Builder(this)
+                    .setTitle("No News Sources")
+                    .setMessage("no news sources exist that match the specified Topic, Language and/or Country")
+                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            filterMap.put(id, prev);
+                        }
+                    }).show();
+        } else {
+            sources = nSources;
+            arrayAdapter = new ArrayAdapter<>(this, R.layout.drawer_list, sources);
+            drawerList.setAdapter(arrayAdapter);
+            arrayAdapter.notifyDataSetChanged();
+            setTitle("News Aggregator " + "(" +sources.length+")");
+        }
+    }
+
+    @SuppressLint("ResourceAsColor")
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void updateMenu(NewsSource[] newsSources) {
+        Arrays.stream(newsSources).map(NewsSource::getCategory).distinct().forEach(topic -> topics.add(1, 0, 0, topic));
+        Arrays.stream(newsSources).map(NewsSource::getCountry).distinct().forEach(country -> countries.add(2, 0, 0, country));
+        Arrays.stream(newsSources).map(NewsSource::getLanguage).distinct().forEach(lang -> language.add(3, 0, 0, lang));
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu, menu);
+        topics = menu.addSubMenu("Topics");
+        topics.add(1, 0, 0, "all");
+        countries = menu.addSubMenu("Countries");
+        countries.add(2, 0, 0, "all");
+        language = menu.addSubMenu("Languages");
+        language.add(3, 0, 0,"all");
         return true;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
 
         if (drawerToggle.onOptionsItemSelected(item)) {
-            Log.d(TAG, "onOptionsItemSelected: mDrawerToggle " + item);
+            Log.d(TAG, "onOptionsItemSelected: DrawerToggle " + item);
             return true;
         }
 
-        String selection = "";
-        if (item.getItemId() == R.id.menuA) {
-            selection = "You want to do A";
-        } else if (item.getItemId() == R.id.menuB) {
-            selection = "You have chosen B";
-        } else if (item.getItemId() == R.id.menuC) {
-            selection = "C is your selection";
-        }
-
+        updateData(item.getTitle().toString(), item.getGroupId());
         return super.onOptionsItemSelected(item);
     }
 
@@ -144,6 +226,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         WebView webView = new WebView(this);
         webView.loadUrl(articles.get(position).getNewsUrl());
+    }
 
+    public Map<String, String> loadJsonData(int resource, String key) {
+        Log.d(TAG, "loadFile: Loading JSON File");
+        Map<String, String> data = new HashMap<>();
+
+        try {
+            InputStream inputStream = getResources().openRawResource(resource);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+
+            JSONArray jsonArray = new JSONObject(sb.toString()).getJSONArray(key);
+
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.getJSONObject(i);
+                data.put(jsonObject.getString("code"), jsonObject.getString("name"));
+            }
+
+            inputStream.close();
+        } catch (FileNotFoundException e) {
+            Log.d(TAG, "File Not Found: JSON File not found");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return data;
     }
 }
