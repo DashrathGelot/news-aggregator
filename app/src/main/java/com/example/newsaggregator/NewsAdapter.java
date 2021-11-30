@@ -46,6 +46,7 @@ public class NewsAdapter extends RecyclerView.Adapter<NewsAdapter.ViewHolder> {
         holder.pageCount.setText((position + 1) + " of " + newsList.size());
 
         if (!news.getUrlImage().equals("null")) {
+            holder.imageView.setImageResource(R.drawable.loading);
             new ImageService(holder.imageView, mainActivity).execute(news.getUrlImage());
         }
     }
