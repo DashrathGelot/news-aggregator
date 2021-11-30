@@ -74,8 +74,7 @@ public class NewsService extends Service implements Runnable {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void run() {
-        String API_TOKEN = "6fac9434bdfc49408d7df9e0ff2b6f7f";
-        String API_URL = "https://newsapi.org/v2/top-headlines?sources="+source+"&apiKey="+API_TOKEN;
+        String API_URL = "https://newsapi.org/v2/top-headlines?sources="+source+"&apiKey=929aff506ba44e939989bcde945477a3";
         handleResult(getResult(API_URL));
     }
 }
