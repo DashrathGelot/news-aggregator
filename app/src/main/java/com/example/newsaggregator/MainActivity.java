@@ -11,7 +11,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -109,9 +108,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
                 View view = super.getView(position, convertView, parent);
-                TextView text = view.findViewById(android.R.id.text1);
-                text.setTextColor(service.getColor(newsSources[position].getCategory()));
-                return super.getView(position, convertView, parent);
+                ((TextView)view.findViewById(android.R.id.text1)).setTextColor(service.getColor(newsSources[position].getCategory()));
+                return view;
             }
         };
         drawerList.setAdapter(arrayAdapter);
@@ -191,9 +189,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 @Override
                 public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
                     View view = super.getView(position, convertView, parent);
-                    TextView text = view.findViewById(android.R.id.text1);
-                    text.setTextColor(service.getColor(filteredSources[position].getCategory()));
-                    return super.getView(position, convertView, parent);
+                    ((TextView)view.findViewById(android.R.id.text1)).setTextColor(service.getColor(filteredSources[position].getCategory()));
+                    return view;
                 }
             };
 
